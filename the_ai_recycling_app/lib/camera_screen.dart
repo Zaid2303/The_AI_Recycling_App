@@ -29,27 +29,20 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _initializeCamera() async {
     // Request camera permission
     if (await Permission.camera.request().isGranted) {
-      // Fetch the available cameras
       _cameras = await availableCameras();
-
       if (_cameras != null && _cameras!.isNotEmpty) {
         _cameraController = CameraController(
-          _cameras![0], // Use the first available camera
-          ResolutionPreset.high, // Set resolution
+          _cameras![0],
+          ResolutionPreset.high,
         );
 
-        // Initialize the camera controller
         await _cameraController?.initialize();
         if (mounted) {
           setState(() {
             _isCameraInitialized = true;
           });
         }
-      } else {
-        debugPrint("No cameras available.");
       }
-    } else {
-      debugPrint("Camera permission denied.");
     }
   }
 
@@ -60,17 +53,13 @@ class _CameraScreenState extends State<CameraScreen> {
       body: _isCameraInitialized
           ? Stack(
               children: [
-                // Display the camera preview
-
-                // Rotate the camera preview to correct orientation
-                Transform.rotate(
-                  angle: -90 * 3.14159 / 180, // Rotate 90 degrees
-                  child: CameraPreview(_cameraController!),
+                Center(
+                  child: _buildFullScreenCameraPreview(context),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Padding(
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.all(25.0),
                     child: FloatingActionButton(
                       onPressed: _capturePhoto,
                       child: const Icon(Icons.camera),
@@ -85,15 +74,36 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 
+  Widget _buildFullScreenCameraPreview(BuildContext context) {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return const Center(child: Text('Camera not initialized'));
+    }
+
+    // Get the aspect ratio of the camera preview
+    final cameraAspectRatio = _cameraController!.value.aspectRatio;
+
+    // Get the size of the device screen
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Use OverflowBox to fill the screen without distorting the preview
+    return OverflowBox(
+      maxWidth: (screenWidth / 1.02) * cameraAspectRatio,
+      maxHeight: (screenHeight / 1.02) * cameraAspectRatio,
+      child: Transform.rotate(
+        angle: -90 * 3.14159 / 180, // Rotate the preview by 90 degrees
+        child: AspectRatio(
+          aspectRatio: cameraAspectRatio, // Preserve camera aspect ratio
+          child: CameraPreview(_cameraController!),
+        ),
+      ),
+    );
+  }
+
   Future<void> _capturePhoto() async {
     try {
-      // Ensure the camera is ready to take a picture
       if (_cameraController != null && _cameraController!.value.isInitialized) {
-        // Capture the photo
         final image = await _cameraController!.takePicture();
-        debugPrint('Photo captured: ${image.path}');
-
-        // Display a snackbar or navigate to a preview screen
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Photo saved to ${image.path}')),
         );
