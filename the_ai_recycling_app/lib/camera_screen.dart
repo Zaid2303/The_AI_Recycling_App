@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'ai_explain_screen.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({Key? key}) : super(key: key);
@@ -104,8 +105,13 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       if (_cameraController != null && _cameraController!.value.isInitialized) {
         final image = await _cameraController!.takePicture();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Photo saved to ${image.path}')),
+
+        // Navigate to the AIExplainScreen and pass the image path
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AIExplainScreen(imagePath: image.path),
+          ),
         );
       }
     } catch (e) {
