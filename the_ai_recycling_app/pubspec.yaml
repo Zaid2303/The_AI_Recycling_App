@@ -36,9 +36,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   camera: ^0.11.0+2
   permission_handler: ^11.3.1
-  image_picker: ^1.1.2
+  image: ^4.5.2
   tflite_flutter: ^0.11.0
-  tflite_flutter_helper: ^0.4.0
+  shared_preferences: ^2.3.5
 
 dev_dependencies:
   flutter_test:
@@ -62,7 +62,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/recycling_model.tflite
+     - assets/recycling_model.tflite
 
   # To add assets to your application, add an assets section, like this:
   # assets:

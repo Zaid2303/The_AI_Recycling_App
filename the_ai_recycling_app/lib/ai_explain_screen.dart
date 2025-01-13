@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:image/image.dart' as img;
 
 class AIExplainScreen extends StatefulWidget {
   final String imagePath;
 
-  const AIExplainScreen({Key? key, required this.imagePath}) : super(key: key);
+  const AIExplainScreen({super.key, required this.imagePath});
 
   @override
   State<AIExplainScreen> createState() => _AIExplainScreenState();
@@ -18,18 +19,27 @@ class _AIExplainScreenState extends State<AIExplainScreen> {
   @override
   void initState() {
     super.initState();
-    _loadModel();
-    _predictImage(widget.imagePath);
+    _loadModel().then((_) {
+      _predictImage(widget.imagePath);
+    });
   }
 
   // Load the TFLite model
   Future<void> _loadModel() async {
     try {
-      interpreter =
-          await Interpreter.fromAsset('assets/recycling_model.tflite');
-      debugPrint("Model loaded successfully.");
-    } catch (e) {
+      interpreter = await Interpreter.fromAsset('recycling_model.tflite');
+      if (interpreter != null) {
+        var inputShape = interpreter!.getInputTensor(0).shape;
+        var outputShape = interpreter!.getOutputTensor(0).shape;
+        debugPrint("Model loaded successfully.");
+        debugPrint("Input shape: $inputShape, Output shape: $outputShape");
+      }
+    } catch (e, stacktrace) {
       debugPrint("Failed to load model: $e");
+      debugPrint("Stacktrace: $stacktrace");
+      setState(() {
+        predictionResult = "Error loading model.";
+      });
     }
   }
 
@@ -44,19 +54,25 @@ class _AIExplainScreenState extends State<AIExplainScreen> {
 
     try {
       // Load and preprocess the image
-      final imageBytes = File(imagePath).readAsBytesSync();
-      final input = _processImage(imageBytes);
+      final input = await _processImage(imagePath);
 
-      // Allocate memory for the output
-      final output = List.filled(1 * 1, 0.0).reshape([1, 1]);
+      // Allocate memory for the output (adjust size as per your model)
+      final output = List.filled(
+              interpreter!.getOutputTensor(0).shape.reduce((a, b) => a * b),
+              0.0)
+          .reshape(interpreter!.getOutputTensor(0).shape);
 
       // Run inference
       interpreter!.run(input, output);
 
-      // Update the UI with the prediction result
+      // Get the predicted label and confidence
+      final predictedIndex =
+          output[0].indexOf(output[0].reduce((a, b) => a > b ? a : b));
+      final confidence = output[0][predictedIndex];
+
       setState(() {
         predictionResult =
-            "Prediction: ${output[0][0] > 0.5 ? 'Recyclable' : 'Non-Recyclable'}";
+            "Prediction: Category $predictedIndex (Confidence: ${confidence.toStringAsFixed(2)})";
       });
     } catch (e) {
       debugPrint("Error during prediction: $e");
@@ -66,15 +82,30 @@ class _AIExplainScreenState extends State<AIExplainScreen> {
     }
   }
 
-  // Helper function to preprocess the image
-  List<List<List<double>>> _processImage(List<int> imageBytes) {
-    // Add your preprocessing logic here (e.g., resizing, normalizing)
-    // For now, this is a placeholder that assumes a processed format
-    return [
-      [
-        [127.5], // Example normalized value
-      ],
-    ];
+  Future<List<double>> _processImage(String imagePath) async {
+    final imageFile = File(imagePath);
+
+    // Check if the file exists
+    if (!imageFile.existsSync()) {
+      throw Exception("Image file not found at $imagePath");
+    }
+
+    final image = img.decodeImage(imageFile.readAsBytesSync());
+
+    if (image == null) {
+      throw Exception("Unable to decode image.");
+    }
+
+    // Resize the image to match the model's input size (e.g., 150x150)
+    final resizedImage = img.copyResize(image, width: 150, height: 150);
+
+    // Normalize pixel values (0-255) to the range [0, 1] and flatten the array
+    final input = resizedImage
+        .getBytes() // Get raw bytes of the image
+        .map((pixel) => pixel / 255.0) // Normalize to [0, 1]
+        .toList();
+
+    return input;
   }
 
   @override
@@ -103,6 +134,9 @@ class _AIExplainScreenState extends State<AIExplainScreen> {
                 child: Image.file(
                   File(widget.imagePath),
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.error, color: Colors.red);
+                  },
                 ),
               ),
             ),

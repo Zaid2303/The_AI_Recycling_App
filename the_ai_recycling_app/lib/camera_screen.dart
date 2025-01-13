@@ -91,13 +91,13 @@ class _CameraScreenState extends State<CameraScreen> {
     return OverflowBox(
       maxWidth: (screenWidth / 1.02) * cameraAspectRatio,
       maxHeight: (screenHeight / 1.02) * cameraAspectRatio,
-      child: Transform.rotate(
-        angle: -90 * 3.14159 / 180, // Rotate the preview by 90 degrees
-        child: AspectRatio(
-          aspectRatio: cameraAspectRatio, // Preserve camera aspect ratio
-          child: CameraPreview(_cameraController!),
-        ),
-      ),
+      //child: Transform.rotate(
+      //angle: -90 * 3.14159 / 180, // Rotate the preview by 90 degrees
+      //child: AspectRatio(
+      //aspectRatio: cameraAspectRatio, // Preserve camera aspect ratio
+      child: CameraPreview(_cameraController!),
+      //),
+      //),
     );
   }
 

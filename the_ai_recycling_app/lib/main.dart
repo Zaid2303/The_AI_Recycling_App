@@ -1,7 +1,21 @@
 import 'package:flutter/material.dart';
-import 'camera_screen.dart';
+import 'bin_collection_screen/bin_collection_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+
+Future<void> debugSharedPreferences() async {
+  final prefs = await SharedPreferences.getInstance();
+  final keys = prefs.getKeys();
+
+  for (var key in keys) {
+    final value = prefs.get(key);
+    print('$key: ${value is String ? jsonDecode(value) : value}');
+  }
+}
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  debugSharedPreferences(); // Debug SharedPreferences before the app starts
   runApp(const MyApp());
 }
 
@@ -11,7 +25,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Custom Layout',
+      title: 'Bin Collection App',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
@@ -29,12 +43,40 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  String binCollectionInfo = "Bin Collection";
+  Color binBoxColor = Colors.grey[300]!; // Default color for no data
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBinData();
+  }
+
+  Future<void> _loadBinData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final binData = prefs.getString('binData');
+
+    if (binData != null) {
+      try {
+        final List<dynamic> data = jsonDecode(binData);
+        if (data.isNotEmpty) {
+          final firstBin = data.first; // Use the first bin in the list
+          setState(() {
+            binCollectionInfo =
+                "Next collection on ${firstBin['nextDate']} - ${firstBin['color']} bin";
+            binBoxColor =
+                Color(int.parse(firstBin['colorCode'].substring(2), radix: 16));
+          });
+        }
+      } catch (e) {
+        print('Error parsing bin data: $e');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
@@ -44,9 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            // Menu Icon
             GestureDetector(
               onTap: () {
-                _scaffoldKey.currentState?.openDrawer();
+                // Open drawer
               },
               child: Container(
                 width: 60,
@@ -58,67 +101,39 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: const Icon(Icons.menu, color: Colors.white, size: 40),
               ),
             ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const CameraScreen()),
-                );
-              },
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                child:
-                    const Icon(Icons.camera_alt, color: Colors.white, size: 40),
-              ),
-            ),
           ],
         ),
       ),
-      drawer: Drawer(
-        backgroundColor: Colors.orange,
-        width: MediaQuery.of(context).size.width * 0.5, // Half the screen
-        child: Column(
-          children: [
-            const DrawerHeader(
+      body: ListView(
+        padding: const EdgeInsets.all(16.0),
+        children: [
+          GestureDetector(
+            onTap: () async {
+              // Navigate to bin collection screen
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BinCollectionScreen(),
+                ),
+              );
+              // Reload data after returning
+              _loadBinData();
+            },
+            child: Container(
+              height: 150,
+              decoration: BoxDecoration(
+                color: binBoxColor,
+                borderRadius: BorderRadius.circular(16.0),
+              ),
               child: Center(
                 child: Text(
-                  'Menu',
-                  style: TextStyle(fontSize: 24, color: Colors.white),
+                  binCollectionInfo,
+                  style: const TextStyle(fontSize: 20, color: Colors.white),
                 ),
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.home, color: Colors.white),
-              title: const Text('Home', style: TextStyle(color: Colors.white)),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings, color: Colors.white),
-              title:
-                  const Text('Settings', style: TextStyle(color: Colors.white)),
-              onTap: () {},
-            ),
-          ],
-        ),
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16.0),
-        itemCount: 10, // 10 rectangles
-        itemBuilder: (context, index) {
-          return Container(
-            margin: const EdgeInsets.symmetric(vertical: 10.0),
-            height: 150, // Adjust height of rectangles as needed
-            decoration: BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.circular(16.0),
-            ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
