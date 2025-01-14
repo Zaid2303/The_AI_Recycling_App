@@ -1,21 +1,11 @@
 import 'package:flutter/material.dart';
-import 'bin_collection_screen/bin_collection_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-
-Future<void> debugSharedPreferences() async {
-  final prefs = await SharedPreferences.getInstance();
-  final keys = prefs.getKeys();
-
-  for (var key in keys) {
-    final value = prefs.get(key);
-    print('$key: ${value is String ? jsonDecode(value) : value}');
-  }
-}
+import 'bin_collection_screen/bin_collection_screen.dart';
+import 'recycling_rush_screen.dart';
+import 'camera_screen.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  debugSharedPreferences(); // Debug SharedPreferences before the app starts
   runApp(const MyApp());
 }
 
@@ -25,31 +15,31 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Bin Collection App',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
-      ),
-      home: const HomeScreen(),
+      title: 'Recycling App',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const MainScreen(),
     );
   }
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _MainScreenState extends State<MainScreen> {
   String binCollectionInfo = "Bin Collection";
-  Color binBoxColor = Colors.grey[300]!; // Default color for no data
+  String apiDataInfo = "Loading API Data...";
+  Color binBoxColor = Colors.grey[300]!;
+  Color apiBoxColor = Colors.grey[300]!;
 
   @override
   void initState() {
     super.initState();
     _loadBinData();
+    _fetchApiData();
   }
 
   Future<void> _loadBinData() async {
@@ -60,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         final List<dynamic> data = jsonDecode(binData);
         if (data.isNotEmpty) {
-          final firstBin = data.first; // Use the first bin in the list
+          final firstBin = data.first;
           setState(() {
             binCollectionInfo =
                 "Next collection on ${firstBin['nextDate']} - ${firstBin['color']} bin";
@@ -71,6 +61,32 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (e) {
         print('Error parsing bin data: $e');
       }
+    }
+  }
+
+  Future<void> _fetchApiData() async {
+    try {
+      // Mock API call
+      await Future.delayed(
+          const Duration(seconds: 2)); // Simulating network delay
+      final apiData = {
+        "title": "Recycling Stats",
+        "message": "You've recycled 10kg this week!",
+        "colorCode": "#FF69B4" // Pink color
+      };
+
+      setState(() {
+        apiDataInfo = "${apiData['title']}: ${apiData['message']}";
+        apiBoxColor = Color(
+            int.parse(apiData['colorCode']!.substring(1), radix: 16) +
+                0xFF000000);
+      });
+    } catch (e) {
+      print('Error fetching API data: $e');
+      setState(() {
+        apiDataInfo = "Failed to load API data.";
+        apiBoxColor = Colors.red;
+      });
     }
   }
 
@@ -86,10 +102,9 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Menu Icon
             GestureDetector(
               onTap: () {
-                // Open drawer
+                Scaffold.of(context).openDrawer();
               },
               child: Container(
                 width: 60,
@@ -101,39 +116,135 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: const Icon(Icons.menu, color: Colors.white, size: 40),
               ),
             ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CameraScreen(),
+                  ),
+                );
+              },
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                child:
+                    const Icon(Icons.camera_alt, color: Colors.white, size: 40),
+              ),
+            ),
           ],
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          GestureDetector(
-            onTap: () async {
-              // Navigate to bin collection screen
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const BinCollectionScreen(),
+          Material(
+            borderRadius: BorderRadius.circular(16.0),
+            color: binBoxColor,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16.0),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const BinCollectionScreen(),
+                  ),
+                );
+                _loadBinData();
+              },
+              child: Container(
+                height: 150,
+                child: Center(
+                  child: Text(
+                    binCollectionInfo,
+                    style: const TextStyle(fontSize: 20, color: Colors.white),
+                  ),
                 ),
-              );
-              // Reload data after returning
-              _loadBinData();
-            },
-            child: Container(
-              height: 150,
-              decoration: BoxDecoration(
-                color: binBoxColor,
-                borderRadius: BorderRadius.circular(16.0),
               ),
-              child: Center(
-                child: Text(
-                  binCollectionInfo,
-                  style: const TextStyle(fontSize: 20, color: Colors.white),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Material(
+            borderRadius: BorderRadius.circular(16.0),
+            color: Colors.green[300],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16.0),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RecyclingRushScreen(),
+                  ),
+                );
+              },
+              child: Container(
+                height: 150,
+                child: const Center(
+                  child: Text(
+                    "Play Recycling Rush",
+                    style: TextStyle(fontSize: 20, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Material(
+            borderRadius: BorderRadius.circular(16.0),
+            color: apiBoxColor,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16.0),
+              onTap: _fetchApiData,
+              child: Container(
+                height: 150,
+                child: Center(
+                  child: Text(
+                    apiDataInfo,
+                    style: const TextStyle(fontSize: 20, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),
           ),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.orange,
+              ),
+              child: Text(
+                'Menu',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.home),
+              title: const Text('Home'),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info),
+              title: const Text('About'),
+              onTap: () {
+                // Navigate to About Screen
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
