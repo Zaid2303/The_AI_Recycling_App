@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
+import 'package:image/image.dart' as img;
+import 'dart:typed_data';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:math';
 
-/*
 void main() {
   runApp(const MyApp());
 }
@@ -13,167 +14,183 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Model Test')),
-        body: const ModelTestWidget(),
-      ),
+    return const MaterialApp(
+      home: PredictionScreen(),
     );
   }
 }
 
-class ModelTestWidget extends StatefulWidget {
-  const ModelTestWidget({super.key});
+class PredictionScreen extends StatefulWidget {
+  const PredictionScreen({super.key});
 
   @override
-  ModelTestWidgetState createState() => ModelTestWidgetState();
+  State<PredictionScreen> createState() => PredictionScreenState();
 }
 
-class ModelTestWidgetState extends State<ModelTestWidget> {
-  Interpreter? _interpreter;
-  List<int>? _outputShape;
-  String _output = "Initializing...";
+class PredictionScreenState extends State<PredictionScreen> {
+  String _prediction = 'Loading...';
+  double _confidence = 0.0;
+  bool _isLoading = true;
+  late Interpreter _interpreter;
+  final String _imagePath = 'assets/card_test_image1.jpg';
+  List<String> _labels = [];
 
   @override
   void initState() {
     super.initState();
-    _loadModel();
+    _initializeApp();
   }
 
-  Future<void> _loadModel() async {
+  Future<void> _initializeApp() async {
     try {
-      // Load model data
-      final ByteData modelData =
-          await rootBundle.load('assets/recycling_model.tflite');
-      final Uint8List modelBytes = modelData.buffer.asUint8List();
-      debugPrint("Model size: ${modelBytes.length} bytes");
-
-      // Initialize interpreter
-      final options = InterpreterOptions()
-        ..threads = 2
-        ..useNnApiForAndroid = true;
-
-      final interpreter = Interpreter.fromBuffer(modelBytes, options: options);
-      final outputShape = interpreter.getOutputTensor(0).shape;
-
-      setState(() {
-        _interpreter = interpreter;
-        _outputShape = outputShape;
-        _output = "Model loaded successfully!";
-      });
+      await _loadLabels();
+      await _initializeModel();
+      await _predict();
     } catch (e) {
-      debugPrint("Error loading model: $e");
-      setState(() {
-        _output = "Error loading model: $e";
-      });
+      _updateState(error: 'Error: ${e.toString()}');
     }
   }
 
-  Future<void> _runInference() async {
-    try {
-      if (_interpreter == null) {
-        setState(() {
-          _output = "Model is not loaded yet.";
-        });
-        return;
-      }
+  Future<void> _loadLabels() async {
+    final labelData = await rootBundle.loadString('assets/labels.txt');
+    _labels = labelData
+        .split('\n')
+        .where((label) => label.trim().isNotEmpty)
+        .map((label) => label.trim())
+        .toList();
+  }
 
-      final inputImage = await _loadAndPreprocessImage('assets/test_image.jpg');
-      if (inputImage == null) {
-        setState(() {
-          _output = "Image preprocessing failed.";
-        });
-        return;
-      }
+  Future<void> _initializeModel() async {
+    _interpreter = await Interpreter.fromAsset('assets/model_unquant.tflite');
 
-      final input = inputImage.reshape([1, 150, 150, 3]);
-      final output =
-          List.filled(_outputShape![1], 0.0).reshape([1, _outputShape![1]]);
-
-      _interpreter!.run(input, output);
-
-      setState(() {
-        _output = "Inference Output: ${output[0]}";
-      });
-    } catch (e) {
-      debugPrint("Error during inference: $e");
-      setState(() {
-        _output = "Error during inference: $e";
-      });
+    // Verify input tensor requirements
+    final inputTensor = _interpreter.getInputTensor(0);
+    if (inputTensor.shape[1] != 224 || inputTensor.shape[2] != 224) {
+      throw Exception('Model expects input shape ${inputTensor.shape}');
     }
   }
 
-  Future<List<List<List<List<double>>>>?> _loadAndPreprocessImage(
-      String path) async {
+  Future<void> _predict() async {
     try {
-      final ByteData imageData = await rootBundle.load(path);
-      final Uint8List imageBytes = imageData.buffer.asUint8List();
+      _updateState(loading: true);
 
-      final img.Image? image = img.decodeImage(imageBytes);
-      if (image == null) {
-        throw Exception("Failed to decode image.");
-      }
+      // Load and preprocess image
+      final ByteData imageData = await rootBundle.load(_imagePath);
+      final image = img.decodeImage(imageData.buffer.asUint8List())!;
 
-      final img.Image resizedImage =
-          img.copyResize(image, width: 150, height: 150);
+      // Convert to proper 4D tensor format [1, 224, 224, 3]
+      final inputBuffer = _createInputTensor(image);
 
-      final List<List<List<List<double>>>> normalized = [
-        List.generate(
-          150,
-          (y) => List.generate(
-            150,
-            (x) {
-              final pixel = resizedImage.getPixel(x, y);
-              final r = pixel.r / 255.0; // Extract red
-              final g = pixel.g / 255.0; // Extract green
-              final b = pixel.b / 255.0; // Extract blue
-              return [r, g, b];
-            },
-          ),
-        ),
-      ];
+      // Prepare output buffer with EXPLICIT double type
+      final outputBuffer = List<double>.filled(6, 0.0).reshape([1, 6]);
 
-      return normalized;
+      // Run inference
+      _interpreter.run(inputBuffer, outputBuffer);
+
+      // Process results with EXPLICIT type casting
+      final results = (outputBuffer[0] as List<dynamic>).cast<double>();
+      final maxConfidence = results.reduce(max);
+      final maxIndex = results.indexOf(maxConfidence);
+
+      _updateState(
+        prediction: _labels[maxIndex],
+        confidence: maxConfidence,
+      );
     } catch (e) {
-      debugPrint("Error preprocessing image: $e");
-      return null;
+      _updateState(error: 'Prediction Error: ${e.toString()}');
     }
+  }
+
+  List<List<List<List<double>>>> _createInputTensor(img.Image image) {
+    // Resize to model requirements
+    final resized = img.copyResize(image, width: 224, height: 224);
+
+    // Create 4D tensor [1, height, width, channels]
+    return List.generate(
+        1,
+        (batch) => List.generate(
+            224,
+            (y) => List.generate(224, (x) {
+                  final pixel = resized.getPixel(x, y);
+                  return [
+                    (pixel.r / 127.5) - 1.0, // Normalize to [-1, 1]
+                    (pixel.g / 127.5) - 1.0,
+                    (pixel.b / 127.5) - 1.0,
+                  ];
+                })));
+  }
+
+  void _updateState({
+    String? prediction,
+    double? confidence,
+    String? error,
+    bool loading = false,
+  }) {
+    if (!mounted) return;
+
+    setState(() {
+      _prediction = error ?? prediction ?? _prediction;
+      _confidence = confidence ?? _confidence;
+      _isLoading = loading;
+    });
+  }
+
+  @override
+  void dispose() {
+    _interpreter.close();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(_output),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _runInference,
-            child: const Text('Run Inference'),
-          ),
-        ],
+    return Scaffold(
+      appBar: AppBar(title: const Text('Waste Classification')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Image.asset(
+                _imagePath,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Text('Failed to load image');
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+            _isLoading
+                ? const Column(
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 10),
+                      Text('Processing...'),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      Text(
+                        'Prediction: $_prediction',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Confidence: ${(_confidence * 100).toStringAsFixed(1)}%',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ],
+                  ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _predict,
+              child: const Text('Classify Again'),
+            ),
+          ],
+        ),
       ),
     );
-  }
-}
-
-
-*/
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  try {
-    final ByteData modelData =
-        await rootBundle.load('assets/recycling_model.tflite');
-    debugPrint("Model size: ${modelData.lengthInBytes} bytes");
-
-    final options = InterpreterOptions();
-    final interpreter = Interpreter.fromBuffer(modelData.buffer.asUint8List(),
-        options: options);
-    debugPrint("Interpreter initialized successfully!");
-  } catch (e) {
-    debugPrint("Failed to load interpreter: $e");
   }
 }
