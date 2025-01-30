@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this import
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 
@@ -13,141 +15,194 @@ class AIExplainScreen extends StatefulWidget {
 }
 
 class _AIExplainScreenState extends State<AIExplainScreen> {
-  String predictionResult = "Loading...";
-  Interpreter? interpreter;
+  String _prediction = 'Loading...';
+  double _confidence = 0.0;
+  Interpreter? _interpreter;
+  List<String> _labels = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadModel().then((_) {
-      _predictImage(widget.imagePath);
-    });
+    _initializeModel();
   }
 
-  // Load the TFLite model
+  Future<void> _initializeModel() async {
+    try {
+      await Future.wait([
+        _loadModel(),
+        _loadLabels(),
+      ]);
+      _predictImage(File(widget.imagePath));
+    } catch (e) {
+      _updateState(error: 'Initialization Error: ${e.toString()}');
+    }
+  }
+
   Future<void> _loadModel() async {
     try {
-      interpreter = await Interpreter.fromAsset('recycling_model.tflite');
-      if (interpreter != null) {
-        var inputShape = interpreter!.getInputTensor(0).shape;
-        var outputShape = interpreter!.getOutputTensor(0).shape;
-        debugPrint("Model loaded successfully.");
-        debugPrint("Input shape: $inputShape, Output shape: $outputShape");
+      _interpreter = await Interpreter.fromAsset('assets/model_unquant.tflite');
+      final inputTensor = _interpreter!.getInputTensor(0);
+      if (inputTensor.shape[1] != 224 || inputTensor.shape[2] != 224) {
+        throw Exception('Model expects input shape ${inputTensor.shape}');
       }
-    } catch (e, stacktrace) {
-      debugPrint("Failed to load model: $e");
-      debugPrint("Stacktrace: $stacktrace");
-      setState(() {
-        predictionResult = "Error loading model.";
-      });
+    } catch (e) {
+      _updateState(error: 'Model Error: ${e.toString()}');
+      rethrow;
     }
   }
 
-  // Run prediction on the image
-  Future<void> _predictImage(String imagePath) async {
-    if (interpreter == null) {
-      setState(() {
-        predictionResult = "Model not loaded.";
-      });
-      return;
+  Future<void> _loadLabels() async {
+    try {
+      final labelData = await rootBundle.loadString('assets/labels.txt');
+      _labels = labelData
+          .split('\n')
+          .where((label) => label.trim().isNotEmpty)
+          .map((label) => label.trim())
+          .toList();
+    } catch (e) {
+      _updateState(error: 'Label Error: ${e.toString()}');
+      rethrow;
     }
+  }
+
+  Future<void> _predictImage(File imageFile) async {
+    if (_interpreter == null || _labels.isEmpty) return;
 
     try {
-      // Load and preprocess the image
-      final input = await _processImage(imagePath);
+      final imageBytes = await imageFile.readAsBytes();
+      final image = img.decodeImage(imageBytes);
 
-      // Allocate memory for the output (adjust size as per your model)
-      final output = List.filled(
-              interpreter!.getOutputTensor(0).shape.reduce((a, b) => a * b),
-              0.0)
-          .reshape(interpreter!.getOutputTensor(0).shape);
+      if (image == null) throw Exception('Failed to decode image');
 
-      // Run inference
-      interpreter!.run(input, output);
+      final inputBuffer = _createInputTensor(image);
+      final outputBuffer = List<double>.filled(6, 0.0).reshape([1, 6]);
 
-      // Get the predicted label and confidence
-      final predictedIndex =
-          output[0].indexOf(output[0].reduce((a, b) => a > b ? a : b));
-      final confidence = output[0][predictedIndex];
+      _interpreter!.run(inputBuffer, outputBuffer);
 
-      setState(() {
-        predictionResult =
-            "Prediction: Category $predictedIndex (Confidence: ${confidence.toStringAsFixed(2)})";
-      });
+      final results = (outputBuffer[0] as List<dynamic>).cast<double>();
+      final maxConfidence = results.reduce(max);
+      final maxIndex = results.indexOf(maxConfidence);
+
+      _updateState(
+        prediction: _labels[maxIndex],
+        confidence: maxConfidence,
+      );
     } catch (e) {
-      debugPrint("Error during prediction: $e");
-      setState(() {
-        predictionResult = "Error occurred during prediction.";
-      });
+      _updateState(error: 'Prediction Error: ${e.toString()}');
     }
   }
 
-  Future<List<double>> _processImage(String imagePath) async {
-    final imageFile = File(imagePath);
+  List<List<List<List<double>>>> _createInputTensor(img.Image image) {
+    final resized = img.copyResize(image, width: 224, height: 224);
+    return List.generate(
+        1,
+        (batch) => List.generate(
+            224,
+            (y) => List.generate(224, (x) {
+                  final pixel = resized.getPixel(x, y);
+                  return [
+                    (pixel.r / 127.5) - 1.0, // Normalize to [-1, 1]
+                    (pixel.g / 127.5) - 1.0,
+                    (pixel.b / 127.5) - 1.0,
+                  ];
+                })));
+  }
 
-    // Check if the file exists
-    if (!imageFile.existsSync()) {
-      throw Exception("Image file not found at $imagePath");
-    }
+  void _updateState({
+    String? prediction,
+    double? confidence,
+    String? error,
+    bool loading = false,
+  }) {
+    if (!mounted) return;
 
-    final image = img.decodeImage(imageFile.readAsBytesSync());
-
-    if (image == null) {
-      throw Exception("Unable to decode image.");
-    }
-
-    // Resize the image to match the model's input size (e.g., 150x150)
-    final resizedImage = img.copyResize(image, width: 150, height: 150);
-
-    // Normalize pixel values (0-255) to the range [0, 1] and flatten the array
-    final input = resizedImage
-        .getBytes() // Get raw bytes of the image
-        .map((pixel) => pixel / 255.0) // Normalize to [0, 1]
-        .toList();
-
-    return input;
+    setState(() {
+      _prediction = error ?? prediction ?? _prediction;
+      _confidence = confidence ?? _confidence;
+      _isLoading = loading;
+    });
   }
 
   @override
   void dispose() {
-    interpreter?.close();
+    _interpreter?.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Explain Screen'),
-      ),
+      appBar: AppBar(title: const Text('Recycling Classification')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Display the image in the top-left corner
-            SizedBox(
-              width: 100,
-              height: 100,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8.0),
-                child: Image.file(
-                  File(widget.imagePath),
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.error, color: Colors.red);
-                  },
-                ),
-              ),
-            ),
+            _buildImagePreview(),
             const SizedBox(height: 20),
-            Text(
-              predictionResult,
-              style: const TextStyle(fontSize: 18),
-            ),
+            _buildResultDisplay(),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildImagePreview() {
+    return Container(
+      width: 150,
+      height: 150,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8.0),
+        child: Image.file(
+          File(widget.imagePath),
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const Icon(
+            Icons.error,
+            color: Colors.red,
+            size: 40,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultDisplay() {
+    return _isLoading
+        ? const CircularProgressIndicator()
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Classification Result:',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _prediction,
+                style: const TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Confidence: ${(_confidence * 100).toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          );
   }
 }
