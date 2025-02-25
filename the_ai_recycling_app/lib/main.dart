@@ -15,8 +15,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Recycling App',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      title: 'EcoTrack',
+      theme: ThemeData.light().copyWith(
+        primaryColor: Colors.blue,
+        textTheme: ThemeData.light().textTheme.apply(
+              fontFamily: 'Poppins',
+              bodyColor: Colors.black,
+              displayColor: Colors.black,
+            ),
+      ),
+      darkTheme: ThemeData.dark().copyWith(
+        primaryColor: Colors.blue,
+        textTheme: ThemeData.dark().textTheme.apply(
+              fontFamily: 'Poppins',
+              bodyColor: Colors.white,
+              displayColor: Colors.white,
+            ),
+      ),
       home: const MainScreen(),
     );
   }
@@ -30,10 +45,14 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  String binCollectionInfo = "Bin Collection";
-  String apiDataInfo = "Loading API Data...";
-  Color binBoxColor = Colors.grey[300]!;
-  Color apiBoxColor = Colors.grey[300]!;
+  String _nextCollectionDate = "Loading...";
+  String _binColor = "";
+  String _apiStatus = "Loading stats...";
+  Color _binColorCode = Colors.grey;
+  Color _apiStatusColor = const Color(0xFF2196F3);
+  final PageController _pageController =
+      PageController(viewportFraction: 0.9, initialPage: 1);
+  final ValueNotifier<bool> _isDarkMode = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -52,198 +71,326 @@ class _MainScreenState extends State<MainScreen> {
         if (data.isNotEmpty) {
           final firstBin = data.first;
           setState(() {
-            binCollectionInfo =
-                "Next collection on ${firstBin['nextDate']} - ${firstBin['color']} bin";
-            binBoxColor =
+            _nextCollectionDate = firstBin['nextDate'];
+            _binColor = firstBin['color'];
+            _binColorCode =
                 Color(int.parse(firstBin['colorCode'].substring(2), radix: 16));
           });
         }
       } catch (e) {
-        print('Error parsing bin data: $e');
+        debugPrint('Error parsing bin data: $e');
       }
     }
   }
 
   Future<void> _fetchApiData() async {
     try {
-      // Mock API call
-      await Future.delayed(
-          const Duration(seconds: 2)); // Simulating network delay
+      await Future.delayed(const Duration(seconds: 2));
       final apiData = {
-        "title": "Recycling Stats",
-        "message": "You've recycled 10kg this week!",
-        "colorCode": "#FF69B4" // Pink color
+        "message": "You've recycled 10kg!",
+        "colorCode": "#4CAF50"
       };
 
       setState(() {
-        apiDataInfo = "${apiData['title']}: ${apiData['message']}";
-        apiBoxColor = Color(
+        _apiStatus = "${apiData['message']}";
+        _apiStatusColor = Color(
             int.parse(apiData['colorCode']!.substring(1), radix: 16) +
                 0xFF000000);
       });
     } catch (e) {
-      print('Error fetching API data: $e');
       setState(() {
-        apiDataInfo = "Failed to load API data.";
-        apiBoxColor = Colors.red;
+        _apiStatus = "Update failed. Tap to retry";
+        _apiStatusColor = Colors.red;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        toolbarHeight: 80,
-        titleSpacing: 0,
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            GestureDetector(
-              onTap: () {
-                Scaffold.of(context).openDrawer();
-              },
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                child: const Icon(Icons.menu, color: Colors.white, size: 40),
-              ),
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return ValueListenableBuilder<bool>(
+      valueListenable: _isDarkMode,
+      builder: (context, isDark, child) {
+        return MaterialApp(
+          theme: isDark ? ThemeData.dark() : ThemeData.light(),
+          home: Scaffold(
+            appBar: AppBar(
+              title: const Text('EcoTrack',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+              centerTitle: true,
+              elevation: 0,
             ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CameraScreen(),
+            body: PageView(
+              controller: _pageController,
+              scrollDirection: Axis.horizontal,
+              children: [
+                // Settings Card (first card)
+                _buildSettingsCard(screenHeight),
+                // Scanner Card
+                _buildLargeCard(
+                  color: Colors.orange,
+                  icon: Icons.camera_alt,
+                  title: "Recycling Scanner",
+                  subtitle: "Scan items to recycle",
+                  actionText: "Open Camera",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const CameraScreen()),
                   ),
-                );
-              },
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  borderRadius: BorderRadius.circular(12.0),
+                  height: screenHeight * 0.6,
                 ),
-                child:
-                    const Icon(Icons.camera_alt, color: Colors.white, size: 40),
-              ),
+                // Bin Collection Card
+                _buildLargeCard(
+                  color: _binColorCode,
+                  icon: Icons.delete_outline,
+                  title: "Next Collection",
+                  subtitle: _nextCollectionDate,
+                  actionText:
+                      _binColor.isNotEmpty ? "$_binColor bin" : "Set up",
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const BinCollectionScreen()),
+                    );
+                    _loadBinData();
+                  },
+                  height: screenHeight * 0.6,
+                ),
+                // Game Card
+                _buildLargeCard(
+                  color: const Color(0xFF2196F3),
+                  icon: Icons.sports_esports,
+                  title: "Recycling Rush",
+                  subtitle: "Play our recycling game",
+                  actionText: "Start Game",
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const RecyclingRushScreen()),
+                  ),
+                  height: screenHeight * 0.6,
+                ),
+                // Status Card
+                _buildLargeStatusCard(
+                  color: _apiStatusColor,
+                  status: _apiStatus,
+                  onTap: _fetchApiData,
+                  height: screenHeight * 0.6,
+                ),
+              ],
             ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSettingsCard(double height) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Container(
+        height: height * 0.6,
+        margin: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: Colors.grey[200],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildSettingsButton(
+                icon: Icons.info,
+                label: "About",
+                onTap: () => _showAboutDialog(context),
+              ),
+              _buildSettingsButton(
+                icon: Icons.login,
+                label: "Log In",
+                onTap: () => _showLogin(context),
+              ),
+              _buildSettingsButton(
+                icon: Icons.dark_mode,
+                label: "Dark Mode",
+                onTap: () => _isDarkMode.value = !_isDarkMode.value,
+              ),
+              _buildSettingsButton(
+                icon: Icons.settings,
+                label: "Advanced Settings",
+                onTap: () => _showAdvancedSettings(context),
+              ),
+            ],
+          ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          Material(
-            borderRadius: BorderRadius.circular(16.0),
-            color: binBoxColor,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16.0),
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const BinCollectionScreen(),
-                  ),
-                );
-                _loadBinData();
-              },
-              child: Container(
-                height: 150,
-                child: Center(
-                  child: Text(
-                    binCollectionInfo,
-                    style: const TextStyle(fontSize: 20, color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Material(
-            borderRadius: BorderRadius.circular(16.0),
-            color: Colors.green[300],
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16.0),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RecyclingRushScreen(),
-                  ),
-                );
-              },
-              child: Container(
-                height: 150,
-                child: const Center(
-                  child: Text(
-                    "Play Recycling Rush",
-                    style: TextStyle(fontSize: 20, color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Material(
-            borderRadius: BorderRadius.circular(16.0),
-            color: apiBoxColor,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16.0),
-              onTap: _fetchApiData,
-              child: Container(
-                height: 150,
-                child: Center(
-                  child: Text(
-                    apiDataInfo,
-                    style: const TextStyle(fontSize: 20, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
+    );
+  }
+
+  Widget _buildSettingsButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, size: 30),
+      title: Text(label, style: const TextStyle(fontSize: 20)),
+      onTap: onTap,
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('About EcoTrack'),
+        content: const Text('A sustainable recycling companion app'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
           ),
         ],
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.orange,
-              ),
-              child: Text(
-                'Menu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
+    );
+  }
+
+  void _showLogin(BuildContext context) {
+    // Implement login logic
+  }
+
+  void _showAdvancedSettings(BuildContext context) {
+    // Implement advanced settings
+  }
+
+  Widget _buildLargeCard({
+    required Color color,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String actionText,
+    required VoidCallback onTap,
+    required double height,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: height,
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: color,
+            boxShadow: [
+              BoxShadow(
+                color: color.withAlpha(100),
+                blurRadius: 20,
+                spreadRadius: 2,
+              )
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(50),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 50, color: Colors.white),
                 ),
-              ),
+                Column(
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 28,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 15),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 20,
+                            color: Colors.white.withAlpha(200),
+                            height: 1.4)),
+                  ],
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(30),
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                  child: Text(actionText,
+                      style: const TextStyle(
+                          fontSize: 18,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Home'),
-              onTap: () {
-                Navigator.pop(context);
-              },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLargeStatusCard({
+    required Color color,
+    required String status,
+    required VoidCallback onTap,
+    required double height,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: height,
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [color.withAlpha(200), color],
             ),
-            ListTile(
-              leading: const Icon(Icons.info),
-              title: const Text('About'),
-              onTap: () {
-                // Navigate to About Screen
-              },
+            boxShadow: [
+              BoxShadow(
+                color: color.withAlpha(100),
+                blurRadius: 20,
+                spreadRadius: 2,
+              )
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.insights, size: 60, color: Colors.white),
+                const SizedBox(height: 30),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(status,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 24,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500)),
+                ),
+                const SizedBox(height: 30),
+                const Icon(Icons.touch_app, size: 40, color: Colors.white),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
