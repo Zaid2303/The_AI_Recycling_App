@@ -104,12 +104,6 @@ class _RecyclingRushScreenState extends State<RecyclingRushScreen> {
     });
   }
 
-/*
-  void _restartTimer() {
-    timer?.cancel();
-    _startTimer();
-  }
-*/
   void _checkAnswer(String selectedBin) {
     if (isGameOver) return;
 
@@ -132,7 +126,8 @@ class _RecyclingRushScreenState extends State<RecyclingRushScreen> {
           feedback = "Wrong!";
         }
         feedbackColor = Colors.red;
-        timerDuration = max(timerDuration - 2, 1); // Penalty: -2 seconds
+        timerDuration =
+            timerDuration - 2 >= 1 ? timerDuration - 2 : 1; // Penalty
       }
     });
     _generateNewItem();
@@ -158,10 +153,20 @@ class _RecyclingRushScreenState extends State<RecyclingRushScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Your score: $score"),
+              Text(
+                "Your score: $score",
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
               TextField(
                 onChanged: (value) => playerName = value,
-                decoration: const InputDecoration(hintText: "Enter your name"),
+                decoration: const InputDecoration(
+                  hintText: "Enter your name",
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(),
+                ),
               ),
             ],
           ),
@@ -175,7 +180,7 @@ class _RecyclingRushScreenState extends State<RecyclingRushScreen> {
                   isGameStarted = false;
                 });
               },
-              child: const Text("Save"),
+              child: const Text("Save & Exit"),
             ),
           ],
         );
@@ -211,115 +216,309 @@ class _RecyclingRushScreenState extends State<RecyclingRushScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Recycling Rush"),
-        backgroundColor: Colors.green,
+        backgroundColor: Colors.blue,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: isGameStarted
             ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (!isGameOver) ...[
-                    Text(
-                      "Sort this item: $currentItem",
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: correctBins.values.toSet().map((bin) {
-                        return ElevatedButton(
-                          onPressed: () => _checkAnswer(bin),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: feedbackColor,
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          'Sort this item: $currentItem',
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
                           ),
-                          child: Text(bin),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 40),
-                    Text(
-                      feedback,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: feedbackColor,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Text(
-                      "Score: $score",
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold),
+                    const SizedBox(height: 32),
+                    Center(
+                      child: SingleChildScrollView(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: correctBins.values.toSet().map((bin) {
+                            return Container(
+                              margin: const EdgeInsets.all(8),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () => _checkAnswer(bin),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Ink(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.grey[200]!,
+                                          Colors.white,
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                        horizontal: 24,
+                                      ),
+                                      child: Text(
+                                        bin,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 20),
-                    Text(
-                      "Time Left: $timerDuration",
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: feedbackColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(16),
+                        border:
+                            Border.all(color: feedbackColor.withOpacity(0.4)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          feedback,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: feedbackColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Score: $score',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Time Left: $timerDuration',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  timerDuration < 5 ? Colors.red : Colors.black,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     if (currentPowerUp != null)
-                      Text(
-                        "Power-Up: $currentPowerUp",
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.yellow, Colors.orange],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          'Power-Up: $currentPowerUp',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      "Leaderboard",
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black54,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 10),
+                    (highScores.isEmpty)
+                        ? const Center(
+                            child: Text(
+                              "No high scores yet!",
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          )
+                        : Expanded(
+                            child: ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: highScores.length,
+                              itemExtent: 50,
+                              itemBuilder: (context, index) {
+                                return Container(
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        spreadRadius: 2,
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "#${index + 1} ${highScores[index]['name']}",
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        "${highScores[index]['score']}",
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                    const SizedBox(height: 32),
                   ],
-                  const SizedBox(height: 40),
-                  const Text(
-                    "Top Scores",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  ...highScores.map((entry) {
-                    return Text("${entry['name']}: ${entry['score']}");
-                  }).toList(),
                 ],
               )
             : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
                     "Welcome to Recycling Rush!",
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        selectedDifficulty = "Easy";
-                      });
-                      _startGame();
-                    },
-                    child: const Text("Start (Easy)"),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            selectedDifficulty = "Easy";
+                          });
+                          _startGame();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 32,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Icon(Icons.slow_motion_video),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            selectedDifficulty = "Medium";
+                          });
+                          _startGame();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 32,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Icon(Icons.hourglass_bottom),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            selectedDifficulty = "Hard";
+                          });
+                          _startGame();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 32,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Icon(Icons.flash_on),
+                      ),
+                    ],
                   ),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        selectedDifficulty = "Medium";
-                      });
-                      _startGame();
-                    },
-                    child: const Text("Start (Medium)"),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        selectedDifficulty = "Hard";
-                      });
-                      _startGame();
-                    },
-                    child: const Text("Start (Hard)"),
-                  ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   const Text(
-                    "Easy: 30 seconds, slower timer decrement\n"
-                    "Medium: 20 seconds, normal timer decrement\n"
-                    "Hard: 15 seconds, faster timer decrement",
+                    "Difficulties:\n"
+                    "\u2022 Easy: 30s - Slow timer\n"
+                    "\u2022 Medium: 20s - Normal timer\n"
+                    "\u2022 Hard: 15s - Fast timer",
+                    style: TextStyle(fontSize: 16, color: Colors.black54),
                     textAlign: TextAlign.center,
                   ),
                 ],
               ),
       ),
+      floatingActionButton: (!isGameOver && isGameStarted)
+          ? FloatingActionButton(
+              onPressed: _endGame,
+              backgroundColor: Colors.deepOrange,
+              child: const Icon(Icons.pause),
+            )
+          : null,
     );
   }
 }

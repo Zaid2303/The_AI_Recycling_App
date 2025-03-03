@@ -5,7 +5,7 @@ import 'dart:convert';
 import 'add_bins.dart';
 
 class BinCollectionScreen extends StatefulWidget {
-  const BinCollectionScreen({Key? key}) : super(key: key);
+  const BinCollectionScreen({super.key});
 
   @override
   State<BinCollectionScreen> createState() => _BinCollectionScreenState();
@@ -21,20 +21,80 @@ class _BinCollectionScreenState extends State<BinCollectionScreen> {
     _loadBinData();
   }
 
+  int getFrequencyDays(String frequency) {
+    switch (frequency.toLowerCase()) {
+      case 'daily':
+        return 1;
+      case 'weekly':
+        return 7;
+      case 'monthly':
+        return 30;
+      case 'annually':
+        return 365;
+      default:
+        return 1;
+    }
+  }
+
   Future<void> _loadBinData() async {
     final prefs = await shared_preferences.SharedPreferences.getInstance();
     final binData = prefs.getString('binData');
+
+    List<Map<String, dynamic>> updatedBins = [];
 
     if (binData != null) {
       try {
         final data = jsonDecode(binData);
         if (data is List) {
-          setState(() {
-            bins = List<Map<String, dynamic>>.from(data);
+          updatedBins = List<Map<String, dynamic>>.from(data);
+          DateTime today = DateTime.now();
+
+          for (var bin in updatedBins) {
+            String nextDateStr = bin['nextDate'] ?? '';
+            DateTime? nextDate;
+
+            try {
+              nextDate = DateTime.parse(nextDateStr);
+            } catch (e) {
+              debugPrint('Invalid date format for bin: $bin');
+              nextDate = null;
+            }
+
+            if (nextDate != null && nextDate.isBefore(today)) {
+              String intervalStr = bin['interval'] ?? '1';
+              String frequency = bin['frequency'] ?? 'Daily';
+
+              int interval = int.tryParse(intervalStr) ?? 1;
+              int frequencyDays = getFrequencyDays(frequency);
+              int daysPerPeriod = frequencyDays * interval;
+
+              int daysSince = today.difference(nextDate).inDays;
+              if (daysSince < 0) daysSince = 0;
+
+              int periods = (daysSince + daysPerPeriod - 1) ~/ daysPerPeriod;
+              DateTime newNextDate =
+                  nextDate.add(Duration(days: periods * daysPerPeriod));
+
+              bin['nextDate'] = newNextDate.toString().split(' ').first;
+            }
+          }
+
+          updatedBins.sort((a, b) {
+            DateTime aDate = DateTime.parse(a['nextDate'] ?? '');
+            DateTime bDate = DateTime.parse(b['nextDate'] ?? '');
+            return aDate.compareTo(bDate);
           });
+
+          setState(() {
+            bins = updatedBins;
+          });
+
+          await prefs.setString('binData', jsonEncode(updatedBins));
+        } else {
+          debugPrint('Bin data is not a list. Ignoring.');
         }
       } catch (e) {
-        print('Error parsing bin data: $e');
+        debugPrint('Error parsing bin data: $e');
       }
     }
   }
@@ -51,10 +111,9 @@ class _BinCollectionScreenState extends State<BinCollectionScreen> {
     _saveBinData();
   }
 
-  void _navigateToAddBin({Map<String, dynamic>? bin}) async {
-    final newBin = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(builder: (context) => AddBinsScreen(existingBin: bin)),
+  Future<void> _navigateToAddBin({Map<String, dynamic>? bin}) async {
+    final newBin = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => AddBinsScreen(existingBin: bin)),
     );
     if (newBin != null) {
       setState(() {
@@ -97,10 +156,21 @@ class _BinCollectionScreenState extends State<BinCollectionScreen> {
               child: ListView.builder(
                 itemCount: bins.length,
                 itemBuilder: (context, index) {
-                  final bin = bins[index];
+                  Map<String, dynamic> bin = bins[index];
                   return ListTile(
                     title: Text('${bin['color']} Bin'),
-                    subtitle: Text('Next Collection: ${bin['nextDate']}'),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'Next Collection: ${bin['nextDate'] ?? 'Not set'}'),
+                          Text(
+                              'Waste Type: ${bin['wasteType'] ?? 'Not specified'}'),
+                        ],
+                      ),
+                    ),
                     trailing: isEditMode
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
@@ -122,7 +192,7 @@ class _BinCollectionScreenState extends State<BinCollectionScreen> {
             ),
             if (isEditMode)
               ElevatedButton(
-                onPressed: () => _navigateToAddBin(),
+                onPressed: _navigateToAddBin,
                 child: const Text('Add Bin'),
               ),
           ],
