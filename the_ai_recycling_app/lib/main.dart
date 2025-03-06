@@ -1,16 +1,22 @@
+import 'dart:convert';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'bin_collection_screen/bin_collection_screen.dart';
 import 'recycling_rush_screen.dart';
 import 'camera_screen.dart';
+import 'login_screen.dart';
+import 'signup_screen.dart';
+import 'user_profile_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -43,9 +49,24 @@ class _MyAppState extends State<MyApp> {
                 ),
           ),
           themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-          home: MainScreen(
-            isDarkMode: _isDarkMode,
-          ),
+          initialRoute: '/',
+          routes: {
+            '/': (context) => MainScreen(
+                  isDarkMode: _isDarkMode,
+                  email: '',
+                ),
+            '/login': (context) => LoginScreen(
+                  onSuccessfulLogin: () {},
+                  email: '',
+                ),
+            '/signup': (context) => SignUpScreen(
+                  onSuccessfulSignup: () {},
+                  email: '',
+                ),
+            '/user_profile': (context) => const UserProfileScreen(
+                  email: '',
+                ),
+          },
         );
       },
     );
@@ -54,20 +75,23 @@ class _MyAppState extends State<MyApp> {
 
 class MainScreen extends StatefulWidget {
   final ValueNotifier<bool> isDarkMode;
+  final String email;
+
   const MainScreen({
-    Key? key,
+    super.key,
     required this.isDarkMode,
-  }) : super(key: key);
+    required this.email,
+  }) : super();
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  String _nextCollectionDate = "Loading...";
+  String _nextCollectionDate = "Setup your bins";
   String _binColor = "";
-  String _apiStatus = "Loading stats...";
   Color _binColorCode = Colors.grey;
+  String _apiStatus = "Loading stats...";
   Color _apiStatusColor = const Color(0xFF2196F3);
   final PageController _pageController =
       PageController(viewportFraction: 0.9, initialPage: 1);
@@ -108,10 +132,7 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _fetchApiData() async {
     try {
       await Future.delayed(const Duration(seconds: 2));
-      final apiData = {
-        "message": "You've recycled 10kg!",
-        "colorCode": "#4CAF50"
-      };
+      final apiData = {"message": "You've recycled!", "colorCode": "#4CAF50"};
 
       setState(() {
         _apiStatus = "${apiData['message']}";
@@ -129,6 +150,30 @@ class _MainScreenState extends State<MainScreen> {
         _apiStatusColor = Colors.red;
       });
     }
+  }
+
+  void _showLogin(BuildContext context) {
+    Navigator.pushNamed(context, '/login');
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('About EcoTrack'),
+        content: const Text('A sustainable recycling companion app'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdvancedSettings(BuildContext context) {
+    // Implement advanced settings
   }
 
   @override
@@ -153,9 +198,7 @@ class _MainScreenState extends State<MainScreen> {
         controller: _pageController,
         scrollDirection: Axis.horizontal,
         children: [
-          // Settings Card (first card)
           _buildSettingsCard(screenHeight),
-          // Scanner Card
           _buildLargeCard(
             color: Colors.orange,
             icon: Icons.camera_alt,
@@ -168,7 +211,6 @@ class _MainScreenState extends State<MainScreen> {
             ),
             height: screenHeight * 0.6,
           ),
-          // Bin Collection Card
           _buildLargeCard(
             color: _binColorCode,
             icon: Icons.delete_outline,
@@ -185,7 +227,6 @@ class _MainScreenState extends State<MainScreen> {
             },
             height: screenHeight * 0.6,
           ),
-          // Game Card
           _buildLargeCard(
             color: const Color(0xFF2196F3),
             icon: Icons.sports_esports,
@@ -199,7 +240,6 @@ class _MainScreenState extends State<MainScreen> {
             ),
             height: screenHeight * 0.6,
           ),
-          // Status Card
           _buildLargeStatusCard(
             color: _apiStatusColor,
             status: _apiStatus,
@@ -219,7 +259,7 @@ class _MainScreenState extends State<MainScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: Theme.of(context).colorScheme.surfaceVariant,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -271,30 +311,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  void _showAboutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('About EcoTrack'),
-        content: const Text('A sustainable recycling companion app'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLogin(BuildContext context) {
-    // Implement login logic
-  }
-
-  void _showAdvancedSettings(BuildContext context) {
-    // Implement advanced settings
-  }
-
   Widget _buildLargeCard({
     required Color color,
     required IconData icon,
@@ -304,7 +320,6 @@ class _MainScreenState extends State<MainScreen> {
     required VoidCallback onTap,
     required double height,
   }) {
-    // Calculate text color based on background color's luminance
     Color textColor =
         color.computeLuminance() < 0.5 ? Colors.white : Colors.black;
 
@@ -336,7 +351,7 @@ class _MainScreenState extends State<MainScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
-                        .surfaceVariant
+                        .surfaceContainerHighest
                         .withAlpha(50),
                     shape: BoxShape.circle,
                   ),
@@ -369,7 +384,7 @@ class _MainScreenState extends State<MainScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
-                        .surfaceVariant
+                        .surfaceContainerHighest
                         .withAlpha(30),
                     borderRadius: BorderRadius.circular(50),
                   ),
@@ -396,7 +411,6 @@ class _MainScreenState extends State<MainScreen> {
     required VoidCallback onTap,
     required double height,
   }) {
-    // Calculate text color based on background color's luminance
     Color textColor =
         color.computeLuminance() < 0.5 ? Colors.white : Colors.black;
 

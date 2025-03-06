@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "344916030043",
+    "project_id": "ecotrackfinalyearproject",
+    "storage_bucket": "ecotrackfinalyearproject.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:344916030043:android:c960eae62114284212457e",
+        "android_client_info": {
+          "package_name": "com.example.the_ai_recycling_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "344916030043-sd5oeapeupbq3sa3g0hs5346pm19hil4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC02ozSk_WCsbOIzPR35KNfGLjIaTZ8QJM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "344916030043-sd5oeapeupbq3sa3g0hs5346pm19hil4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

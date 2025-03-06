@@ -1,51 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'signup_screen.dart';
 import 'main.dart';
 
-class LoginScreen extends StatefulWidget {
-  final VoidCallback onSuccessfulLogin;
+class SignUpScreen extends StatefulWidget {
+  final VoidCallback onSuccessfulSignup;
   final String email;
 
-  const LoginScreen({
+  const SignUpScreen({
     super.key,
-    required this.onSuccessfulLogin,
+    required this.onSuccessfulSignup,
     required this.email,
   });
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _isSigningIn = false;
+  final TextEditingController _usernameController = TextEditingController();
+  bool _isSigningUp = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
-  Future<void> _signIn() async {
-    setState(() => _isSigningIn = true);
+  Future<void> _signUp() async {
+    setState(() => _isSigningUp = true);
 
     // Simulate authentication process
     await Future.delayed(const Duration(seconds: 2));
 
-    // Replace this with your actual authentication logic
     if (_emailController.text.isNotEmpty &&
-        _passwordController.text.isNotEmpty) {
-      // Simulate successful login
+        _passwordController.text.isNotEmpty &&
+        _usernameController.text.isNotEmpty) {
+      // Save user data to SharedPreferences
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('email', _emailController.text);
+      await prefs.setString('password', _passwordController.text);
+      await prefs.setString('username', _usernameController.text);
+
       Fluttertoast.showToast(
-        msg: 'Welcome back!',
+        msg: 'Account created successfully!',
         backgroundColor: Colors.green,
         textColor: Colors.white,
       );
 
-      widget.onSuccessfulLogin();
+      widget.onSuccessfulSignup();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -56,22 +63,21 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } else {
-      // Show error message
       Fluttertoast.showToast(
-        msg: 'Invalid email or password',
+        msg: 'Please fill in all fields',
         backgroundColor: Colors.red,
         textColor: Colors.white,
       );
     }
 
-    setState(() => _isSigningIn = false);
+    setState(() => _isSigningUp = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login'),
+        title: const Text('Sign Up'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -81,6 +87,14 @@ class _LoginScreenState extends State<LoginScreen> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
+            TextField(
+              controller: _usernameController,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                prefixIcon: Icon(Icons.person),
+              ),
+            ),
+            const SizedBox(height: 20),
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(
@@ -99,35 +113,25 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _isSigningIn ? null : _signIn,
+              onPressed: _isSigningUp ? null : _signUp,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              child: _isSigningIn
+              child: _isSigningUp
                   ? const CircularProgressIndicator()
                   : const Text(
-                      'Login',
+                      'Sign Up',
                       style: TextStyle(fontSize: 18),
                     ),
             ),
             const SizedBox(height: 20),
             TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SignUpScreen(
-                      onSuccessfulSignup: () {},
-                      email: '',
-                    ),
-                  ),
-                );
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text(
-                'Don\'t have an account? Sign Up',
+                'Already have an account? Login',
                 style: TextStyle(color: Colors.blue),
               ),
             ),
