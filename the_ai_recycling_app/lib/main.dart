@@ -1,18 +1,95 @@
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:the_ai_recycling_app/Firebase/firebase_api.dart';
 import 'bin_collection_screen/bin_collection_screen.dart';
 import 'recycling_rush_screen.dart';
 import 'camera_screen.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 import 'user_profile_screen.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
   await Firebase.initializeApp();
+  await FirebaseApi().initNotifications();
+  createNotificationChannel();
+
+  // Initialize notification plugin
+  await flutterLocalNotificationsPlugin.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    ),
+  );
+
+  // Create notification channel (for Android 8.0+)
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'default_channel',
+    'Default Channel',
+    description: 'Default notifications channel',
+    importance: Importance.high,
+  );
+
+  flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+
+  // Handle background messages
+  FirebaseMessaging.onBackgroundMessage((RemoteMessage message) async {
+    showNotification(message.notification?.title ?? 'Title',
+        message.notification?.body ?? 'Body');
+  });
+
   runApp(const MyApp());
+}
+
+void showNotification(String title, String body) {
+  flutterLocalNotificationsPlugin.show(
+    0,
+    title,
+    body,
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'default_channel',
+        'Default Channel',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+      ),
+    ),
+  );
+}
+
+void createNotificationChannel() {
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  _firebaseMessaging.requestPermission();
+
+  final AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'default_channel',
+    'Default Channel',
+    description: 'Default notifications channel',
+    importance: Importance.high,
+  );
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
 }
 
 class MyApp extends StatefulWidget {
